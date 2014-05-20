@@ -1,4 +1,4 @@
-var endpoint = 'http://datahub.io/api'
+var endpoint = 'http://demo.ckan.org/api'
   , ckan = new CKAN.Client(endpoint)
   ;
 
@@ -24,6 +24,7 @@ var DataView = Backbone.View.extend({
 //      };
 //    });
   },
+
   render: function() {
     var gridView = {
         id: 'grid',
@@ -35,16 +36,91 @@ var DataView = Backbone.View.extend({
           }
         })
       };
+    var html = Mustache.render(this.template, {resource: this.dataset.toJSON()});
+    this.$el.html(html);
     this.view = new recline.View.MultiView({
       model: this.dataset,
       views: [gridView],
       sidebarViews: [],
-      el: $(this.el)
+      el: this.$el.find('.multiview')
     });
     this.view.render();
     this.dataset.query({size: this.dataset.recordCount});
+  },
+
+  _makeMultiView: function(dataset, $el) {
+    var gridView = {
+        id: 'grid',
+        label: 'Grid',
+        view: new recline.View.SlickGrid({
+          model: dataset,
+          state: {
+            fitColumns: true
+          }
+        })
+      };
+    view = new recline.View.MultiView({
+      model: dataset,
+      views: [gridView],
+      sidebarViews: [],
+      el: $el
+    });
+    view.render();
+    return view;
+  },
+
+  events: {
+    'submit .query-sql': 'sqlQuery'
+  },
+
+  template: ' \
+    <form class="form query-sql"> \
+      <h3>SQL Query</h3> \
+      <p class="help-block">Query this table using SQL via the <a href="http://docs.ckan.org/en/latest/maintaining/datastore.html#ckanext.datastore.logic.action.datastore_search_sql">DataStore SQL API</a></p> \
+      <textarea style="width: 100%;">SELECT * FROM "{{resource.id}}"</textarea> \
+      <div class="sql-error alert alert-error" style="display: none;"></div> \
+      <button type="submit" class="btn btn-primary">Query</button> \
+    </form> \
+    <div class="sql-results"></div> \
+    <div class="multiview"></div> \
+    ',
+
+  sqlQuery: function(e) {
+    var self = this;
+    e.preventDefault();
+
+    var $error = this.$el.find('.sql-error');
+    $error.hide();
+    var sql = this.$el.find('.query-sql textarea').val();
+    // replace ';' on end of sql as seems to trigger a json error
+    sql = sql.replace(/;$/, '');
+    ckan.datastoreSqlQuery(sql, function(err, data) {
+      if (err) {
+        var msg = '<p>Error: ' + err.message + '</p>';
+        $error.html(msg);
+        $error.show('slow');
+        return;
+      }
+
+      // now handle good case ...
+      var dataset = new recline.Model.Dataset({
+        records: data.hits,
+        fields: data.fields
+      });
+      dataset.fetch();
+      // destroy existing view ...
+      var $el = $('<div />');
+      $('.sql-results').append($el);
+      if (self.sqlResultsView) {
+        self.sqlResultsView.remove();
+      }
+
+      self.sqlResultsView = self._makeMultiView(dataset, $el);
+      dataset.query({size: dataset.recordCount});
+    });
   }
 });
+
 
 var CKANSearchWidget = Backbone.View.extend({
   template: '\
@@ -85,7 +161,7 @@ var CKANSearchWidget = Backbone.View.extend({
     _.bindAll(this, 'render');
     this.collection.bind('reset', this.render);
     // first get list of all resources in the datastore
-    ckan.action('datastore_search', {resource_id: '_table_metadata'}, function(err, out) {
+    ckan.action('datastore_search', {resource_id: '_table_metadata', limit: 100000}, function(err, out) {
       self.resourcesInDatastore = _.pluck(out.result.records, 'name');
       self.query();
     });
@@ -111,8 +187,10 @@ var CKANSearchWidget = Backbone.View.extend({
         // should have datastore_active set but unfortunately not ...
         // see https://raw.github.com/datasets/gold-prices/master/data/data.csv
         _.each(dataset.resources, function(res) {
-            console.log(res.id);
-            console.log(self.resourcesInDatastore);
+          // make sure it has a name because we use it in the templating ...
+          res.name = res.name || res.description.slice(0, 30) || 'No name';
+          // console.log(res.id);
+          // console.log(self.resourcesInDatastore);
           if (self.resourcesInDatastore.indexOf(res.id) != -1) {
             res.datastore_active = true;
           }
@@ -135,6 +213,7 @@ jQuery(document).ready(function($) {
   });
   var $container = $('.data-views-container');
   search.on('resource:select', function(id) {
+    $('.intro-div').hide('slow');
     console.log(id);
     var $el = $('<div class="data-view"></div>');
     $container.append($el);
@@ -144,4 +223,28 @@ jQuery(document).ready(function($) {
     });
   });
 
+  // support for using query string state
+  var qs = parseQueryString(location.search);
+  console.log(qs);
+  if (qs.resource) {
+    search.trigger('resource:select', qs.resource);
+  }
 });
+
+parseQueryString = function(q) {
+  if (!q) {
+    return {};
+  }
+  var urlParams = {},
+    e, d = function (s) {
+      return decodeURIComponent(s.replace(/\+/g, " "));
+    },
+    r = /([^&=]+)=?([^&]*)/g;
+
+  if (q && q.length && q[0] === '?') q = q.slice(1);
+  while (e = r.exec(q)) {
+    // TODO: have values be array as query string allow repetition of keys
+    urlParams[d(e[1])] = d(e[2]);
+  }
+  return urlParams;
+};
