@@ -232,7 +232,11 @@ jQuery(document).ready(function($) {
   var ckanSelector = $(".ckan-instance-search-box")
   ckanSelector.change(function () {
     endpoint = ckanSelector.val()
+    // re-initialize CKAN.Client and CKANSearchWidget
     ckan = new CKAN.Client(endpoint)
+    var search = new CKANSearchWidget({
+      el: $el
+    });
   })
 
 });
