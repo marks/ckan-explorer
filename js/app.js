@@ -205,6 +205,30 @@ var CKANSearchWidget = Backbone.View.extend({
 });
 
 jQuery(document).ready(function($) {
+
+  // allow ckan instance we query to be changed
+  var ckanSelector = $(".ckan-instance-search-box")
+  ckanSelector.change(function () {
+    endpoint = ckanSelector.val()
+    // set endpoint and re-initialize CKANSearchWidget
+    ckan.endpoint = endpoint
+    var search = new CKANSearchWidget({
+      el: $el
+    });
+  })
+
+  // support for using query string state
+  var qs = parseQueryString(location.search);
+  console.log(qs);
+  if (qs.endpoint) {
+    ckanSelector.val(qs.endpoint)
+    $(".ckan-instance-search-box").trigger("change")
+  }
+  if (qs.resource) {
+    search.trigger('resource:select', qs.resource);
+  }
+
+
   var $el = $('.dataset-search-here');
   var search = new CKANSearchWidget({
     el: $el
@@ -212,7 +236,7 @@ jQuery(document).ready(function($) {
   var $container = $('.data-views-container');
   search.on('resource:select', function(id) {
     $('.intro-div').hide('slow');
-    console.log(id);
+    // console.log(id);
     var $el = $('<div class="data-view"></div>');
     $container.append($el);
     var view = new DataView({
@@ -221,23 +245,6 @@ jQuery(document).ready(function($) {
     });
   });
 
-  // support for using query string state
-  var qs = parseQueryString(location.search);
-  console.log(qs);
-  if (qs.resource) {
-    search.trigger('resource:select', qs.resource);
-  }
-
-  // allow ckan instance we query to be changed
-  var ckanSelector = $(".ckan-instance-search-box")
-  ckanSelector.change(function () {
-    endpoint = ckanSelector.val()
-    // re-initialize CKAN.Client and CKANSearchWidget
-    ckan = new CKAN.Client(endpoint)
-    var search = new CKANSearchWidget({
-      el: $el
-    });
-  })
 
 });
 
