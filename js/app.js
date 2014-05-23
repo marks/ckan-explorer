@@ -1,4 +1,4 @@
-var endpoint = 'http://demo.ckan.org/api'
+var endpoint = $(".ckan-instance-search-box").val()
   , ckan = new CKAN.Client(endpoint)
   ;
 
@@ -8,8 +8,8 @@ var DataView = Backbone.View.extend({
     var self = this;
     // var resource = new Backbone.Model
     this.dataset = new recline.Model.Dataset({
-      endpoint: endpoint,
       id: options.resourceId,
+      endpoint: endpoint,
       backend: 'ckan'
     });
     this.dataset.fetch()
@@ -220,6 +220,14 @@ jQuery(document).ready(function($) {
   if (qs.resource) {
     search.trigger('resource:select', qs.resource);
   }
+
+  // allow ckan instance we query to be changed
+  var ckanSelector = $(".ckan-instance-search-box")
+  ckanSelector.change(function () {
+    endpoint = ckanSelector.val()
+    ckan = new CKAN.Client(endpoint)
+  })
+
 });
 
 parseQueryString = function(q) {
