@@ -30,6 +30,8 @@ var DataView = Backbone.View.extend({
     this.$el.html(html);
 
     this.view = this._makeMultiView(this.dataset, this.$el.find('.multiview'));
+    console.log(this.view)
+
     this.dataset.query({size: this.dataset.recordCount});
   },
 
@@ -58,9 +60,25 @@ var DataView = Backbone.View.extend({
         model: dataset
       })
     };
+    var timelineView = {
+      id: 'timeline',
+      label: 'Timeline',
+      view: new recline.View.Timeline({
+        model: dataset
+      })
+    };
+    timelineView.view.convertRecord = function(record, fields) {
+      var out = this._convertRecord(record);
+      console.log(record, fields, out)
+      if (out) {
+        out.headline = "Headline" //record.get('x').toString();
+      }
+      return out;
+    }
+
     view = new recline.View.MultiView({
       model: dataset,
-      views: [gridView, graphView, mapView],
+      views: [gridView, graphView, mapView, timelineView],
       sidebarViews: [],
       el: $el
     });
@@ -227,7 +245,6 @@ jQuery(document).ready(function($) {
   if (qs.resource) {
     search.trigger('resource:select', qs.resource);
   }
-
 
   var $el = $('.dataset-search-here');
   var search = new CKANSearchWidget({
