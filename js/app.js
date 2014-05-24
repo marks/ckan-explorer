@@ -10,7 +10,9 @@ var DataView = Backbone.View.extend({
     this.dataset = new recline.Model.Dataset({
       id: options.resourceId,
       endpoint: endpoint,
-      backend: 'ckan'
+      backend: 'ckan',
+      packageMetadata: options.packageMetadata,
+      extras: options.extras
     });
     this.dataset.fetch()
       .done(function() {
@@ -30,22 +32,25 @@ var DataView = Backbone.View.extend({
     this.$el.html(html);
 
     this.view = this._makeMultiView(this.dataset, this.$el.find('.multiview'));
-    console.log(this.view)
 
     this.dataset.query({size: this.dataset.recordCount});
   },
 
   _makeMultiView: function(dataset, $el) {
+    console.log(dataset)
+    var array_of_views = []
     var gridView = {
-        id: 'grid',
-        label: 'Grid',
-        view: new recline.View.SlickGrid({
-          model: dataset,
-          state: {
-            fitColumns: true
-          }
-        })
-      };
+      id: 'grid',
+      label: 'Grid',
+      view: new recline.View.SlickGrid({
+        model: dataset,
+        state: {
+          fitColumns: true
+        }
+      })
+    };
+    array_of_views.push(gridView)
+
     var graphView = {
       id: 'graph',
       label: 'Graph',
@@ -53,6 +58,8 @@ var DataView = Backbone.View.extend({
         model: dataset
       })
     };
+    array_of_views.push(graphView)
+
     var mapView = {
       id: 'map',
       label: 'Map',
@@ -60,25 +67,31 @@ var DataView = Backbone.View.extend({
         model: dataset
       })
     };
-    var timelineView = {
-      id: 'timeline',
-      label: 'Timeline',
-      view: new recline.View.Timeline({
-        model: dataset
-      })
-    };
-    timelineView.view.convertRecord = function(record, fields) {
-      var out = this._convertRecord(record);
-      console.log(record, fields, out)
-      if (out) {
-        out.headline = "Headline" //record.get('x').toString();
+    array_of_views.push(mapView)
+
+    if(dataset.attributes.extras["timeline_enabled"] == "true"){
+      var timelineView = {
+        id: 'timeline',
+        label: 'Timeline',
+        view: new recline.View.Timeline({
+          model: dataset
+        })
+      };
+      timelineView.view.convertRecord = function(record, fields) {
+        // out = {}
+        // out["headline"] = "Headline" //record.get('x').toString();
+        // out["startDate"] = this._parseDate(record.get('InspectionDate'));
+        // console.log(out)
+        // return out;
+        if(this.dataset.attributes.packageMetadata.extras)
+        return null;
       }
-      return out;
+      array_of_views.push(timelineView)      
     }
 
     view = new recline.View.MultiView({
       model: dataset,
-      views: [gridView, graphView, mapView, timelineView],
+      views: array_of_views,
       sidebarViews: [],
       el: $el
     });
@@ -123,6 +136,7 @@ var DataView = Backbone.View.extend({
         records: data.hits,
         fields: data.fields
       });
+
       dataset.fetch();
       // destroy existing view ...
       var $el = $('<div />');
@@ -217,8 +231,10 @@ var CKANSearchWidget = Backbone.View.extend({
   },
   _selectResource: function(e) {
     e.preventDefault();
-    var id = $(e.target).data('id');
-    this.trigger('resource:select', id);
+    target = $(e.target)
+    var id = target.data('id');
+    var name = target.text()
+    this.trigger('resource:select', {id: id, name: name});
   }
 });
 
@@ -242,24 +258,40 @@ jQuery(document).ready(function($) {
     ckanSelector.val(qs.endpoint)
     $(".ckan-instance-search-box").trigger("change")
   }
-  if (qs.resource) {
-    search.trigger('resource:select', qs.resource);
-  }
+  // this is broken now that we use package metadata which can only be retrieved by resource name (not id)
+  // if (qs.resource) {
+  //   search.trigger('resource:select', qs.resource);
+  // }
 
   var $el = $('.dataset-search-here');
   var search = new CKANSearchWidget({
     el: $el
   });
   var $container = $('.data-views-container');
-  search.on('resource:select', function(id) {
+  search.on('resource:select', function(selection) {
     $('.intro-div').hide('slow');
     // console.log(id);
     var $el = $('<div class="data-view"></div>');
     $container.append($el);
-    var view = new DataView({
-      resourceId: id,
-      el: $el
+
+    // need to find package by resource_id!
+    ckan.action('package_search', {q: selection.name}, function(err, out) {
+      var packageMetadata = out.result.results[0] || undefined
+      var extras;
+      if(packageMetadata){
+        extras = _.object(_.toArray(packageMetadata.extras).map(function(x){return x.key}),_.toArray(packageMetadata.extras).map(function(x){return x.value})) 
+      } else {
+        extras = {}
+      }
+      console.log(packageMetadata)
+      var view = new DataView({
+        resourceId: selection.id,
+        el: $el,
+        packageMetadata: packageMetadata ,
+        extras: extras
+      });
     });
+
   });
 
 
