@@ -67,6 +67,7 @@ var DataView = Backbone.View.extend({
     return view;
   },
 
+
   events: {
     'submit .query-sql': 'sqlQuery'
   },
